@@ -12,7 +12,7 @@ The first mismatch will abort the test.
 Simply call
 
 ```
-./htaccess.py <filename>
+./htaccess-test.py <filename>
 ```
 
 ## File format
