@@ -7,6 +7,7 @@ import argparse
 import json
 import requests
 import sys
+from dataclasses import dataclass
 
 VERSION = "0.0.1"
 
@@ -14,6 +15,14 @@ RED = "\033[31m"
 GRE = "\033[32m"
 YEL = "\033[33m"
 NON = "\033[0m"
+
+@dataclass
+class HttpResponse:
+    def __init__(self, line: int, status: int):
+        self.line = line
+        self.status = status
+        self.headers = {}
+        self.data = []
 
 class Testcase:
     cookies = { }
@@ -46,10 +55,13 @@ class Testcase:
         return self._responses
 
     def addresp(self, line: int, status: int) -> None:
-        self._responses += [{"line": line, "status": status}]
+        self._responses += [ HttpResponse(line, status) ]
 
     def addheader(self, header: str, content: str) -> None:
-        self._responses[-1][header] = content
+        self._responses[-1].headers[header] = content
+
+    def adddata(self, header: str, content: str) -> None:
+        self._responses[-1].data += [content]
 
     def __repr__(self):
         resp = json.dumps(self._responses, indent=4)
@@ -72,28 +84,29 @@ class Testcase:
                 allow_redirects=allow_redirects
             )
 
-            line = expect["line"]
-            status = expect["status"]
+            line = expect.line
+            status = expect.status
 
             if int(resp.status_code) != status:
                 diff += [(line, None, status, resp.status_code)]
 
-            del expect["line"]
-            del expect["status"]
-
-            for header, content in expect.items():
+            for header, content in expect.headers.items():
                 if header not in resp.headers:
                     diff += [(line, header, content, None)]
                 else:
                     if resp.headers[header] != content:
-                        diff += [(line, header, content, resp.headers[header])]
+                        diff += [(line, f"{header}: ", content, resp.headers[header])]
+
+            for data in expect.data:
+                if data not in resp.text:
+                    diff += [(line, "=", data, resp.text)]
 
             if diff:
                 return diff
 
             uri = resp.headers["location"] if "location" in resp.headers else None
 
-        return diff
+        return []
 
     def report(self, diff):
         print(f"<@ {self.line}: {self.uri}")
@@ -102,10 +115,10 @@ class Testcase:
             print(f">@ {line}:")
 
             if name:
-                print(f"\t{GRE}-{name}: {expect}{NON}")
+                print(f"\t{GRE}-{name}{expect}{NON}")
 
                 if result:
-                    print(f"\t{RED}+{name}: {result}{NON}")
+                    print(f"\t{RED}+{name}{result}{NON}")
             else:
                 print(f"\t{GRE}-{expect}{NON}")
 
@@ -124,7 +137,6 @@ class TestSuite:
 
         with open(filename, "r", encoding="utf-8") as file:
             uri = None
-            responses = []
 
             for line in file:
                 lineno += 1
@@ -154,13 +166,16 @@ class TestSuite:
 
                     elif statement == ">":
                         # response
-                        try:
-                            # Content-Type: text/html; charset=UTF-8
-                            header, content = line.split(": ")
-                            test.addheader(header, content)
-                        except ValueError:
-                            # 301
-                            test.addresp(lineno, int(line))
+                        if line.startswith("="):
+                            test.adddata(header, line[1:])
+                        else:
+                            try:
+                                # Content-Type: text/html; charset=UTF-8
+                                header, content = line.split(": ")
+                                test.addheader(header, content)
+                            except ValueError:
+                                # 301
+                                test.addresp(lineno, int(line))
 
                     else:
                         raise SyntaxWarning(lineno)

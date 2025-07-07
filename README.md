@@ -22,9 +22,22 @@ expected responses, separated by empty lines.
 
 Requests are denoted by `<` followed by an (optional) HTTP method and the URI.
 
-Each response is started by `>`. In the first response line this has to be
-followed by HTTP status, in subsequent lines HTTP headers my be check as
-`Header-Name: value`.
+Each item in to be checked in the response(s) is started by `>`. The first item
+has to be the HTTP status code, each stats code denoting a new response.
+
+Following the status you may specify a header as `Header-Name: value` or a text
+fragent to be searched in the response data by prefixing the text with `=`.
+Multiple text fragments in the response will be searched separately, the order
+of which will not be checked in the response.
+
+Which means, checking a valid HTML document, this will match both lines,
+therefore passing the test:
+
+```
+< GET https://localhost
+    > =</html>
+    > =<html>
+```
 
 `#` is used as comment char, if it is the first non-whitespace char on the line.
 
