@@ -3,6 +3,7 @@
 """Check whether your `.htaccess` files work as expected by checking against a script
 containing request URIs and expected status codes and headers for the response."""
 
+import argparse
 import json
 import requests
 import sys
@@ -108,14 +109,26 @@ class TestSuite:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        tests = TestSuite.load(sys.argv[1])
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("-v", "--verbose", action="store_true")
+
+    args, files = parser.parse_known_args()
+
+    for file in files:
+        if args.verbose and len(files) > 1:
+            print(file)
+
+        tests = TestSuite.load(file)
 
         for test in tests:
             uri = test.uri
             diff = []
 
             for expect in test.responses:
+                if args.verbose:
+                    print(test.request)
+
                 if test.method == "head":
                     print(test.request)
                     resp = requests.head(uri, allow_redirects=False)
