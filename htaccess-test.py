@@ -52,6 +52,57 @@ class Testcase:
 
         return f"\033[37;1m{self.uri}\033[m{method} \033[36m{resp}\033[m"
 
+    def execute(self):
+        diff = []
+
+        uri = self.uri
+
+        for expect in test.responses:
+            allow_redirects = False if self.method == "head" else True
+            method = getattr(requests, self.method)
+
+            resp = method(uri, allow_redirects=allow_redirects)
+
+            line = expect["line"]
+            status = expect["status"]
+
+            if int(resp.status_code) != status:
+                diff += [(line, None, status, resp.status_code)]
+
+            del expect["line"]
+            del expect["status"]
+
+            for header, content in expect.items():
+                if header not in resp.headers:
+                    diff += [(line, header, content, None)]
+                else:
+                    if resp.headers[header] != content:
+                        diff += [(line, header, content, resp.headers[header])]
+
+            if diff:
+                return diff
+
+            uri = resp.headers["location"] if "location" in resp.headers else None
+
+        return diff
+
+    def report(self, diff):
+        print(f"<@ {self.line}: {self.uri}")
+
+        for line, name, expect, result in diff:
+            print(f">@ {line}:")
+
+            if name:
+                print(f"\t{GRE}-{name}: {expect}{NON}")
+
+                if result:
+                    print(f"\t{RED}+{name}: {result}{NON}")
+            else:
+                print(f"\t{GRE}-{expect}{NON}")
+
+                if result:
+                    print(f"\t{RED}+{result}{NON}")
+
 class TestSuite:
 
     @classmethod
@@ -122,53 +173,11 @@ if __name__ == "__main__":
         tests = TestSuite.load(file)
 
         for test in tests:
-            uri = test.uri
-            diff = []
+            if args.verbose:
+                print(test.request)
 
-            for expect in test.responses:
-                if args.verbose:
-                    print(test.request)
-
-                if test.method == "head":
-                    print(test.request)
-                    resp = requests.head(uri, allow_redirects=False)
-
-                    line = expect["line"]
-                    status = expect["status"]
-
-                    if int(resp.status_code) != status:
-                        diff += [(line, None, status, resp.status_code)]
-
-                    del expect["line"]
-                    del expect["status"]
-
-                    for header, content in expect.items():
-                        if header not in resp.headers:
-                            diff += [(line, header, content, None)]
-                        else:
-                            if resp.headers[header] != content:
-                                diff += [(line, header, content, resp.headers[header])]
-
-                    if diff:
-                        break
-                    else:
-                        uri = resp.headers["location"] if "location" in resp.headers else None
+            diff = test.execute()
 
             if diff:
-                print(f"<@ {test.line}: {test.uri}")
-
-                for line, name, expect, result in diff:
-                    print(f">@ {line}:")
-
-                    if name:
-                        print(f"\t{GRE}-{name}: {expect}{NON}")
-
-                        if result:
-                            print(f"\t{RED}+{name}: {result}{NON}")
-                    else:
-                        print(f"\t{GRE}-{expect}{NON}")
-
-                        if result:
-                            print(f"\t{RED}+{result}{NON}")
-
+                test.report(diff)
                 sys.exit(1)
