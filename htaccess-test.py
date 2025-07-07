@@ -8,12 +8,17 @@ import json
 import requests
 import sys
 
+VERSION = "0.0.1"
+
 RED = "\033[31m"
 GRE = "\033[32m"
 YEL = "\033[33m"
 NON = "\033[0m"
 
 class Testcase:
+    cookies = { }
+    headers = { }
+
     def __init__(self, line: int, uri: str, method = None):
         self._line = line
         self._uri = uri
@@ -61,7 +66,11 @@ class Testcase:
             allow_redirects = False if self.method == "head" else True
             method = getattr(requests, self.method)
 
-            resp = method(uri, allow_redirects=allow_redirects)
+            resp = method(uri,
+                headers=Testcase.headers,
+                cookies=Testcase.cookies,
+                allow_redirects=allow_redirects
+            )
 
             line = expect["line"]
             status = expect["status"]
@@ -162,13 +171,25 @@ class TestSuite:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Output request URI")
+    parser.add_argument("-b", "--cookie", action="store_true", help="Send `test=.htaccess` cookie")
+    parser.add_argument("-H", "--header", action="store_true", help="Send `X-Test=.htaccess` header")
+    parser.add_argument("-A", "--user-agent", type=str, help="Use the specified user agent")
 
     args, files = parser.parse_known_args()
 
     for file in files:
         if args.verbose and len(files) > 1:
             print(file)
+
+        if args.cookie:
+            Testcase.cookies["X-Test"] = ".htaccess"
+
+        if args.header:
+            Testcase.headers["X-Test"] = ".htaccess"
+
+        Testcase.headers["User-Agent"] = \
+            args.user_agent if args.user_agent else f"htaccess-test/{VERSION}"
 
         tests = TestSuite.load(file)
 
