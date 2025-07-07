@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-"""Check URIs for expected HTTP status code and headers to test whether
-redirections on a HTTP server work properly"""
+"""Check whether your `.htaccess` files work as expected by checking against a script
+containing request URIs and expected status codes and headers for the response."""
 
 import json
 import requests
@@ -13,10 +13,10 @@ YEL = "\033[33m"
 NON = "\033[0m"
 
 class Testcase:
-    def __init__(self, line: int, uri: str, flags = None):
+    def __init__(self, line: int, uri: str, method = None):
         self._line = line
         self._uri = uri
-        self._flags = flags
+        self._method = method.lower() # as the requests method names ...
         self._responses = []
 
     @property
@@ -28,8 +28,12 @@ class Testcase:
         return self._uri
 
     @property
-    def flags(self) -> str:
-        return self._flags
+    def method(self) -> str:
+        return self._method
+
+    @property
+    def request(self):
+        return f"< {self.method.upper()} {self.uri}"
 
     @property
     def responses(self): # -> list[dict]:
@@ -43,9 +47,9 @@ class Testcase:
 
     def __repr__(self):
         resp = json.dumps(self._responses, indent=4)
-        flags = f" ({self._flags})" if self._flags else ""
+        method = f" ({self._method})" if self._method else "HEAD"
 
-        return f"\033[37;1m{self.uri}\033[m{flags} \033[36m{resp}\033[m"
+        return f"\033[37;1m{self.uri}\033[m{method} \033[36m{resp}\033[m"
 
 class TestSuite:
 
@@ -65,13 +69,30 @@ class TestSuite:
                 lineno += 1
                 line = line.strip()
 
-                if line.startswith("#"):
-                    continue
+                if line:
+                    statement = line[:1]
+                    line = line[1:].strip()
 
-                if not line:
-                    uri = None
-                else:
-                    if uri:
+                    if statement == "#":
+                        # comment
+                        continue
+
+                    elif statement == "<":
+                        # request
+                        try:
+                            # HEAD http://localhost
+                            method, uri = line.split(" ", maxsplit=1)
+                            test = Testcase(lineno, uri, method)
+                        except ValueError:
+                            # http://localhost
+                            method = "HEAD"
+                            uri = line
+                            test = Testcase(lineno, uri)
+
+                        tests += [test]
+
+                    elif statement == ">":
+                        # response
                         try:
                             # Content-Type: text/html; charset=UTF-8
                             header, content = line.split(": ")
@@ -79,17 +100,9 @@ class TestSuite:
                         except ValueError:
                             # 301
                             test.addresp(lineno, int(line))
-                    else:
-                        try:
-                            # http://localhost follow
-                            uri, flags = line.split(" ")
-                            test = Testcase(lineno, uri, flags)
-                        except ValueError:
-                            # http://localhost
-                            uri = line
-                            test = Testcase(lineno, uri)
 
-                        tests += [test]
+                    else:
+                        raise SyntaxWarning(lineno)
 
         return tests
 
@@ -99,34 +112,34 @@ if __name__ == "__main__":
         tests = TestSuite.load(sys.argv[1])
 
         for test in tests:
-            #print(test)
             uri = test.uri
             diff = []
 
             for expect in test.responses:
-                #print(uri)
-                resp = requests.get(uri, allow_redirects=False)
+                if test.method == "head":
+                    print(test.request)
+                    resp = requests.head(uri, allow_redirects=False)
 
-                line = expect["line"]
-                status = expect["status"]
+                    line = expect["line"]
+                    status = expect["status"]
 
-                if int(resp.status_code) != status:
-                    diff += [(line, None, status, resp.status_code)]
+                    if int(resp.status_code) != status:
+                        diff += [(line, None, status, resp.status_code)]
 
-                del expect["line"]
-                del expect["status"]
+                    del expect["line"]
+                    del expect["status"]
 
-                for header, content in expect.items():
-                    if header not in resp.headers:
-                        diff += [(line, header, content, None)]
+                    for header, content in expect.items():
+                        if header not in resp.headers:
+                            diff += [(line, header, content, None)]
+                        else:
+                            if resp.headers[header] != content:
+                                diff += [(line, header, content, resp.headers[header])]
+
+                    if diff:
+                        break
                     else:
-                        if resp.headers[header] != content:
-                            diff += [(line, header, content, resp.headers[header])]
-
-                if diff:
-                    break
-                else:
-                    uri = resp.headers["location"] if "location" in resp.headers else None
+                        uri = resp.headers["location"] if "location" in resp.headers else None
 
             if diff:
                 print(f"<@ {test.line}: {test.uri}")
