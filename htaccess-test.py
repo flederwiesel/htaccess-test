@@ -3,15 +3,18 @@
 """Check whether your `.htaccess` files work as expected by checking against a script
 containing request URIs and expected status codes and headers for the response."""
 
+# Intended to be used as a script only
+# pylint: disable=invalid-name
+
 import argparse
 import json
 import re
-import requests
 import os
 import sys
 from dataclasses import dataclass
+import requests
 from lxml import html
-from lxml.etree import XPathEvalError
+from lxml.etree import XPathEvalError  # pylint: disable=no-name-in-module
 
 
 VERSION = "0.0.1"
@@ -23,7 +26,8 @@ NON = "\033[0m"
 
 
 @dataclass
-class HttpResponse:
+class ExpectedResponse:
+    """Describes the expected response and where it was defined in the file"""
     def __init__(self, line: int, status: int):
         self.line = line
         self.status = status
@@ -32,6 +36,7 @@ class HttpResponse:
 
 
 class NoStatusCodeForResponse(RuntimeError):
+    """Raised if response does not start with a status code"""
     def __init__(self):
         raise SyntaxError(
             "No HTTP status code specified for reponse. "
@@ -40,11 +45,13 @@ class NoStatusCodeForResponse(RuntimeError):
 
 
 class Testcase:
+    """Conducts and evaluate tests, holds test data"""
     cookies = {}
     headers = {}
 
     @dataclass
     class Diff:
+        """Stores and formats unexpected test results"""
         def __init__(self, line: int, name: str, expected: str, actual: str):
             self.line = line
             self.name = name  # None: HTTP status code
@@ -52,6 +59,7 @@ class Testcase:
             self.actual = actual
 
         def items(self):
+            """Return unexpected results as array of coloured diff-like lines"""
             items = [f">@ {self.line}:"]
 
             if self.name:
@@ -86,6 +94,7 @@ class Testcase:
         self._responses = []
 
     def __str__(self):
+        """Format unexpeted results in a diff-like format"""
         items = [f"<@ {self.line}: {self.uri}"]
 
         for diff in Testcase.report:
@@ -95,34 +104,42 @@ class Testcase:
 
     @property
     def line(self) -> str:
+        # pylint: disable=missing-function-docstring
         return self._line
 
     @property
     def uri(self) -> str:
+        # pylint: disable=missing-function-docstring
         return self._uri
 
     @property
     def method(self) -> str:
+        """Return HTTP request method"""
         return self._method
 
     @property
     def request(self):
+        """Indicate request is being sent"""
         return f"< {self.method.upper()} {self.uri}"
 
     @property
     def responses(self):  # -> list[dict]:
+        # pylint: disable=missing-function-docstring
         return self._responses
 
     def addresp(self, line: int, status: int) -> None:
-        self._responses += [HttpResponse(line, status)]
+        """Adds expected HTTP status to the response list"""
+        self._responses += [ExpectedResponse(line, status)]
 
     def addheader(self, header: str, content: str) -> None:
+        """Adds expected header data to the response list"""
         if not self._responses:
             raise NoStatusCodeForResponse
 
         self._responses[-1].headers[header] = content
 
     def adddata(self, content: str) -> None:
+        """Adds expected body data to the response list"""
         if not self._responses:
             raise NoStatusCodeForResponse
 
@@ -135,6 +152,10 @@ class Testcase:
         return f"\033[37;1m{self.uri}\033[m{method} \033[36m{resp}\033[m"
 
     def execute(self) -> bool:
+        """Executes requests and evaluates responses.
+        Follows redirections as long as according responses are defined.
+        Adds unexpected results to `Testcase.report`"""
+        # pylint: disable=too-many-branches
         nocache = {
             "Cache-Control": "no-cache, no-store",
             "Pragma": "no-cache",
@@ -142,8 +163,8 @@ class Testcase:
 
         uri = self.uri
 
-        for expect in test.responses:
-            allow_redirects = False if self.method == "head" else True
+        for expect in self.responses:
+            allow_redirects = not self.method == "head"
             method = getattr(requests, self.method)
 
             resp = method(
@@ -199,8 +220,8 @@ class Testcase:
         return True
 
 
-class TestSuite:
-
+class TestSuite:  # pylint: disable=too-few-public-methods
+    """Loads test data from file"""
     @classmethod
     def load(cls, filename: str):  # -> list[dict]:
         """Get a list of test cases from file, each being a dict of
@@ -209,10 +230,10 @@ class TestSuite:
         tests = []
         lineno = 0
 
-        with open(filename, "r", encoding="utf-8") as file:
+        with open(filename, "r", encoding="utf-8") as stream:
             uri = None
 
-            for line in file:
+            for line in stream:
                 lineno += 1
                 line = line.strip()
 
@@ -224,19 +245,19 @@ class TestSuite:
                         # comment
                         continue
 
-                    elif statement == "<":
+                    if statement == "<":
                         # request
                         try:
                             # HEAD http://localhost
                             method, uri = line.split(" ", maxsplit=1)
-                            test = Testcase(lineno, uri, method)
+                            testcase = Testcase(lineno, uri, method)
                         except ValueError:
                             # http://localhost
                             method = "HEAD"
                             uri = line
-                            test = Testcase(lineno, uri)
+                            testcase = Testcase(lineno, uri)
 
-                        tests += [test]
+                        tests += [testcase]
 
                     elif statement == ">":
                         # response
@@ -245,15 +266,15 @@ class TestSuite:
                             or line.startswith("~")
                             or line.startswith("/")
                         ):
-                            test.adddata(line)
+                            testcase.adddata(line)
                         else:
                             try:
                                 # Content-Type: text/html; charset=UTF-8
                                 header, content = line.split(": ")
-                                test.addheader(header, content)
+                                testcase.addheader(header, content)
                             except ValueError:
                                 # 301
-                                test.addresp(lineno, int(line))
+                                testcase.addresp(lineno, int(line))
 
                     else:
                         raise SyntaxWarning(lineno)
@@ -293,9 +314,9 @@ if __name__ == "__main__":
             args.user_agent if args.user_agent else f"htaccess-test/{VERSION}"
         )
 
-        tests = TestSuite.load(file)
+        testsuite = TestSuite.load(file)
 
-        for test in tests:
+        for test in testsuite:
             if args.verbose:
                 print(test.request)
 
