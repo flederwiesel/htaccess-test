@@ -6,6 +6,7 @@ containing request URIs and expected status codes and headers for the response."
 import argparse
 import json
 import requests
+import os
 import sys
 from dataclasses import dataclass
 
@@ -28,12 +29,48 @@ class Testcase:
     cookies = { }
     headers = { }
 
+    @dataclass
+    class Diff:
+        def __init__(self, line: int, name: str, expected: str, actual: str):
+            self.line = line
+            self.name = name # None: HTTP status code
+            self.expected = expected
+            self.actual = actual
+
+        def items(self):
+            items = [f">@ {self.line}:"]
+
+            if self.name:
+                items += [f"\t{GRE}-{self.name}: {self.expected}{NON}"]
+
+                if self.actual:
+                    items += [f"\t{RED}+{self.name}: {self.actual}{NON}"]
+                else:
+                    items += [f"\t{RED}+{self.name}:{NON}"]
+            else:
+                items += [f"\t{GRE}-{self.expected}{NON}"]
+
+                if self.actual:
+                    items += [f"\t{RED}+{self.actual}{NON}"]
+
+            return items
+
+    report: list = [] # list[Diff]
+
     def __init__(self, line: int, uri: str, method = None):
         self._line = line
         self._uri = uri
         self._method = method.lower() # as the requests method names ...
         self._responses = []
 
+
+    def __str__(self):
+        items = [f"<@ {self.line}: {self.uri}"]
+
+        for diff in Testcase.report:
+            items += diff.items()
+
+        return os.linesep.join(items)
     @property
     def line(self) -> str:
         return self._line
@@ -69,8 +106,7 @@ class Testcase:
 
         return f"\033[37;1m{self.uri}\033[m{method} \033[36m{resp}\033[m"
 
-    def execute(self):
-        diff = []
+    def execute(self) -> bool:
         nocache = {
             "Cache-Control": "no-cache, no-store",
             "Pragma": "no-cache",
@@ -92,44 +128,25 @@ class Testcase:
             status = expect.status
 
             if int(resp.status_code) != status:
-                diff += [(line, None, status, resp.status_code)]
+                Testcase.report += [Testcase.Diff(line, None, status, resp.status_code)]
 
             for header, content in expect.headers.items():
                 if header not in resp.headers:
-                    diff += [(line, header, content, None)]
+                    Testcase.report += [Testcase.Diff(line, header, content, None)]
                 else:
                     if resp.headers[header] != content:
-                        diff += [(line, header, content, resp.headers[header])]
+                        Testcase.report += [Testcase.Diff(line, header, content, resp.headers[header])]
 
             for data in expect.data:
                 if data not in resp.text:
-                    diff += [(line, "=", data, resp.text)]
+                    Testcase.report += [Testcase.Diff(line, "=", data, resp.text)]
 
-            if diff:
-                return diff
+            if Testcase.report:
+                return False
 
             uri = resp.headers["location"] if "location" in resp.headers else None
 
-        return []
-
-    def report(self, diff):
-        print(f"<@ {self.line}: {self.uri}")
-
-        for line, name, expect, result in diff:
-            print(f">@ {line}:")
-
-            if name:
-                print(f"\t{GRE}-{name}: {expect}{NON}")
-
-                if result:
-                    print(f"\t{RED}+{name}: {result}{NON}")
-                else:
-                    print(f"\t{RED}+{name}:{NON}")
-            else:
-                print(f"\t{GRE}-{expect}{NON}")
-
-                if result:
-                    print(f"\t{RED}+{result}{NON}")
+        return True
 
 class TestSuite:
 
@@ -218,8 +235,6 @@ if __name__ == "__main__":
             if args.verbose:
                 print(test.request)
 
-            diff = test.execute()
-
-            if diff:
-                test.report(diff)
+            if not test.execute():
+                print(test)
                 sys.exit(1)
