@@ -71,6 +71,10 @@ class Testcase:
 
     def execute(self):
         diff = []
+        nocache = {
+            "Cache-Control": "no-cache, no-store",
+            "Pragma": "no-cache",
+        }
 
         uri = self.uri
 
@@ -79,7 +83,7 @@ class Testcase:
             method = getattr(requests, self.method)
 
             resp = method(uri,
-                headers=Testcase.headers,
+                headers={ **Testcase.headers, **nocache },
                 cookies=Testcase.cookies,
                 allow_redirects=allow_redirects
             )
