@@ -27,7 +27,12 @@ class HttpResponse:
         self.headers = {}
         self.data = []
 
-
+class NoStatusCodeForResponse(RuntimeError):
+    def __init__(self):
+        raise SyntaxError(
+            "No HTTP status code specified for reponse. "
+            "This must be the first entry in the reponse section."
+        )
 class Testcase:
     cookies = {}
     headers = {}
@@ -106,9 +111,15 @@ class Testcase:
         self._responses += [HttpResponse(line, status)]
 
     def addheader(self, header: str, content: str) -> None:
+        if not self._responses:
+            raise NoStatusCodeForResponse
+
         self._responses[-1].headers[header] = content
 
     def adddata(self, content: str) -> None:
+        if not self._responses:
+            raise NoStatusCodeForResponse
+
         self._responses[-1].data += [content]
 
     def __repr__(self):
