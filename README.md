@@ -1,7 +1,8 @@
 # Apache .htaccess files and result checking script
 
 Check whether your `.htaccess` files work as expected by checking against a script
-containing request URIs and expected status codes and headers for the response.
+containing request URIs and check the response for expected status codes, headers
+and body content (specific line or by regex search).
 
 Redirections will be followed for as many times as responses are defined.
 
@@ -22,13 +23,14 @@ expected responses, separated by empty lines.
 
 Requests are denoted by `<` followed by an (optional) HTTP method and the URI.
 
-Each item in to be checked in the response(s) is started by `>`. The first item
-has to be the HTTP status code, each stats code denoting a new response.
+Each item to be checked in the response(s) is started by `>`. Multiple reponses
+(in case a redirect is to be folloew) can be concatenated. The first item per
+response has to be the HTTP status code, each status code denoting a new response.
 
-Following the status you may specify a header as `Header-Name: value` or a text
-fragent to be searched in the response data by prefixing the text with `=`.
-Multiple text fragments in the response will be searched separately, the order
-of which will not be checked in the response.
+Following the status you may specify a header as `Header-Name: value`, a line
+of text contained in the responose body - as specified after `=` - or a regex to
+be found in the response body (`~`). Multiple text fragments in the response will
+be searched separately, the order of which will not be checked in the response.
 
 Which means, checking a valid HTML document, this will match both lines,
 therefore passing the test:
@@ -37,6 +39,13 @@ therefore passing the test:
 < GET https://localhost
     > =</html>
     > =<html>
+```
+
+Or checking for *any* title text:
+
+```
+< GET https://localhost
+    > ~<title>[^<]+</title>
 ```
 
 `#` is used as comment char, if it is the first non-whitespace char on the line.

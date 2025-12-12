@@ -5,6 +5,7 @@ containing request URIs and expected status codes and headers for the response."
 
 import argparse
 import json
+import re
 import requests
 import os
 import sys
@@ -43,12 +44,20 @@ class Testcase:
             items = [f">@ {self.line}:"]
 
             if self.name:
-                items += [f"\t{GRE}-{self.name}: {self.expected}{NON}"]
+                if self.name in "=~":
+                    name = ""  # ~ already in `self.expected`
+                    actual = ""  # Suppress actual result (may be extensive!)
+                else:
+                    # Assume Header -> "Header: "
+                    name = f"{self.name}: "
+                    actual = self.actual
+
+                items += [f"\t{GRE}-{name}{self.expected}{NON}"]
 
                 if self.actual:
-                    items += [f"\t{RED}+{self.name}: {self.actual}{NON}"]
+                    items += [f"\t{RED}+{name}{actual}{NON}"]
                 else:
-                    items += [f"\t{RED}+{self.name}:{NON}"]
+                    items += [f"\t{RED}+{name}{NON}"]
             else:
                 items += [f"\t{GRE}-{self.expected}{NON}"]
 
@@ -99,7 +108,7 @@ class Testcase:
     def addheader(self, header: str, content: str) -> None:
         self._responses[-1].headers[header] = content
 
-    def adddata(self, header: str, content: str) -> None:
+    def adddata(self, content: str) -> None:
         self._responses[-1].data += [content]
 
     def __repr__(self):
@@ -143,8 +152,14 @@ class Testcase:
                         ]
 
             for data in expect.data:
-                if data not in resp.text:
-                    Testcase.report += [Testcase.Diff(line, "=", data, resp.text)]
+                op = data[:1]
+
+                if op == "=":
+                    if data[1:] not in resp.text:
+                        Testcase.report += [Testcase.Diff(line, op, data, resp.text)]
+                elif op == "~":
+                    if not re.search(data[1:], resp.text):
+                        Testcase.report += [Testcase.Diff(line, op, data, resp.text)]
 
             if Testcase.report:
                 return False
@@ -195,8 +210,8 @@ class TestSuite:
 
                     elif statement == ">":
                         # response
-                        if line.startswith("="):
-                            test.adddata(header, line[1:])
+                        if line.startswith("=") or line.startswith("~"):
+                            test.adddata(line)
                         else:
                             try:
                                 # Content-Type: text/html; charset=UTF-8
