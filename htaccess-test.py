@@ -28,7 +28,8 @@ NON = "\033[0m"
 @dataclass
 class ExpectedResponse:
     """Describes the expected response and where it was defined in the file"""
-    def __init__(self, line: int, status: int):
+
+    def __init__(self, line: int, status: int) -> None:
         self.line = line
         self.status = status
         self.headers = {}
@@ -37,7 +38,8 @@ class ExpectedResponse:
 
 class NoStatusCodeForResponse(RuntimeError):
     """Raised if response does not start with a status code"""
-    def __init__(self):
+
+    def __init__(self) -> None:
         raise SyntaxError(
             "No HTTP status code specified for reponse. "
             "This must be the first entry in the reponse section."
@@ -46,19 +48,21 @@ class NoStatusCodeForResponse(RuntimeError):
 
 class Testcase:
     """Conducts and evaluate tests, holds test data"""
+
     cookies = {}
     headers = {}
 
     @dataclass
     class Diff:
         """Stores and formats unexpected test results"""
-        def __init__(self, line: int, name: str, expected: str, actual: str):
+
+        def __init__(self, line: int, name: str, expected: str, actual: str) -> None:
             self.line = line
             self.name = name  # None: HTTP status code
             self.expected = expected
             self.actual = actual
 
-        def items(self):
+        def items(self) -> list:  # list[str]
             """Return unexpected results as array of coloured diff-like lines"""
             items = [f">@ {self.line}:"]
 
@@ -87,13 +91,13 @@ class Testcase:
 
     report: list = []  # list[Diff]
 
-    def __init__(self, line: int, uri: str, method=None):
+    def __init__(self, line: int, uri: str, method=None) -> None:
         self._line = line
         self._uri = uri
         self._method = method.lower()  # as the requests method names ...
         self._responses = []
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Format unexpeted results in a diff-like format"""
         items = [f"<@ {self.line}: {self.uri}"]
 
@@ -118,12 +122,12 @@ class Testcase:
         return self._method
 
     @property
-    def request(self):
+    def request(self) -> str:
         """Indicate request is being sent"""
         return f"< {self.method.upper()} {self.uri}"
 
     @property
-    def responses(self):  # -> list[dict]:
+    def responses(self) -> list:  # -> list[dict]:
         # pylint: disable=missing-function-docstring
         return self._responses
 
@@ -145,7 +149,7 @@ class Testcase:
 
         self._responses[-1].data += [content]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         resp = json.dumps(self._responses, indent=4)
         method = f" ({self._method})" if self._method else "HEAD"
 
@@ -222,8 +226,9 @@ class Testcase:
 
 class TestSuite:  # pylint: disable=too-few-public-methods
     """Loads test data from file"""
+
     @classmethod
-    def load(cls, filename: str):  # -> list[dict]:
+    def load(cls, filename: str) -> list:  # -> list[dict]:
         """Get a list of test cases from file, each being a dict of
         line number, request and expected response"""
 
