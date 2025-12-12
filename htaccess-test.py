@@ -17,6 +17,7 @@ GRE = "\033[32m"
 YEL = "\033[33m"
 NON = "\033[0m"
 
+
 @dataclass
 class HttpResponse:
     def __init__(self, line: int, status: int):
@@ -25,15 +26,16 @@ class HttpResponse:
         self.headers = {}
         self.data = []
 
+
 class Testcase:
-    cookies = { }
-    headers = { }
+    cookies = {}
+    headers = {}
 
     @dataclass
     class Diff:
         def __init__(self, line: int, name: str, expected: str, actual: str):
             self.line = line
-            self.name = name # None: HTTP status code
+            self.name = name  # None: HTTP status code
             self.expected = expected
             self.actual = actual
 
@@ -55,14 +57,13 @@ class Testcase:
 
             return items
 
-    report: list = [] # list[Diff]
+    report: list = []  # list[Diff]
 
-    def __init__(self, line: int, uri: str, method = None):
+    def __init__(self, line: int, uri: str, method=None):
         self._line = line
         self._uri = uri
-        self._method = method.lower() # as the requests method names ...
+        self._method = method.lower()  # as the requests method names ...
         self._responses = []
-
 
     def __str__(self):
         items = [f"<@ {self.line}: {self.uri}"]
@@ -71,6 +72,7 @@ class Testcase:
             items += diff.items()
 
         return os.linesep.join(items)
+
     @property
     def line(self) -> str:
         return self._line
@@ -88,11 +90,11 @@ class Testcase:
         return f"< {self.method.upper()} {self.uri}"
 
     @property
-    def responses(self): # -> list[dict]:
+    def responses(self):  # -> list[dict]:
         return self._responses
 
     def addresp(self, line: int, status: int) -> None:
-        self._responses += [ HttpResponse(line, status) ]
+        self._responses += [HttpResponse(line, status)]
 
     def addheader(self, header: str, content: str) -> None:
         self._responses[-1].headers[header] = content
@@ -118,10 +120,11 @@ class Testcase:
             allow_redirects = False if self.method == "head" else True
             method = getattr(requests, self.method)
 
-            resp = method(uri,
-                headers={ **Testcase.headers, **nocache },
+            resp = method(
+                uri,
+                headers={**Testcase.headers, **nocache},
                 cookies=Testcase.cookies,
-                allow_redirects=allow_redirects
+                allow_redirects=allow_redirects,
             )
 
             line = expect.line
@@ -135,7 +138,9 @@ class Testcase:
                     Testcase.report += [Testcase.Diff(line, header, content, None)]
                 else:
                     if resp.headers[header] != content:
-                        Testcase.report += [Testcase.Diff(line, header, content, resp.headers[header])]
+                        Testcase.report += [
+                            Testcase.Diff(line, header, content, resp.headers[header])
+                        ]
 
             for data in expect.data:
                 if data not in resp.text:
@@ -148,10 +153,11 @@ class Testcase:
 
         return True
 
+
 class TestSuite:
 
     @classmethod
-    def load(cls, filename: str): # -> list[dict]:
+    def load(cls, filename: str):  # -> list[dict]:
         """Get a list of test cases from file, each being a dict of
         line number, request and expected response"""
 
@@ -209,10 +215,18 @@ class TestSuite:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("-v", "--verbose", action="store_true", help="Output request URI")
-    parser.add_argument("-b", "--cookie", action="store_true", help="Send `test=.htaccess` cookie")
-    parser.add_argument("-H", "--header", action="store_true", help="Send `X-Test=.htaccess` header")
-    parser.add_argument("-A", "--user-agent", type=str, help="Use the specified user agent")
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Output request URI"
+    )
+    parser.add_argument(
+        "-b", "--cookie", action="store_true", help="Send `test=.htaccess` cookie"
+    )
+    parser.add_argument(
+        "-H", "--header", action="store_true", help="Send `X-Test=.htaccess` header"
+    )
+    parser.add_argument(
+        "-A", "--user-agent", type=str, help="Use the specified user agent"
+    )
 
     args, files = parser.parse_known_args()
 
@@ -226,8 +240,9 @@ if __name__ == "__main__":
         if args.header:
             Testcase.headers["X-Test"] = ".htaccess"
 
-        Testcase.headers["User-Agent"] = \
+        Testcase.headers["User-Agent"] = (
             args.user_agent if args.user_agent else f"htaccess-test/{VERSION}"
+        )
 
         tests = TestSuite.load(file)
 
