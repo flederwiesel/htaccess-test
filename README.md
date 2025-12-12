@@ -27,10 +27,15 @@ Each item to be checked in the response(s) is started by `>`. Multiple reponses
 (in case a redirect is to be folloew) can be concatenated. The first item per
 response has to be the HTTP status code, each status code denoting a new response.
 
-Following the status you may specify a header as `Header-Name: value`, a line
-of text contained in the responose body - as specified after `=` - or a regex to
-be found in the response body (`~`). Multiple text fragments in the response will
-be searched separately, the order of which will not be checked in the response.
+Following the status you may specify a header as `Header-Name: value`, or one of
+the comparison methods for the reqponse body:
+
+* `=` followed by a line of text to be contained in the responose body
+* `~` followed by a regex to match the response body against
+* an XPath to be present in the HTML document
+
+Multiple text fragments in the response will be searched separately, the order
+of which will not be checked however.
 
 Which means, checking a valid HTML document, this will match both lines,
 therefore passing the test:
@@ -46,6 +51,13 @@ Or checking for *any* title text:
 ```
 < GET https://localhost
     > ~<title>[^<]+</title>
+```
+
+Or using an XPath:
+
+```
+< GET https://localhost
+    > /html/head/title
 ```
 
 `#` is used as comment char, if it is the first non-whitespace char on the line.

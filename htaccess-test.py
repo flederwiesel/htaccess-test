@@ -10,6 +10,9 @@ import requests
 import os
 import sys
 from dataclasses import dataclass
+from lxml import html
+from lxml.etree import XPathEvalError
+
 
 VERSION = "0.0.1"
 
@@ -27,12 +30,15 @@ class HttpResponse:
         self.headers = {}
         self.data = []
 
+
 class NoStatusCodeForResponse(RuntimeError):
     def __init__(self):
         raise SyntaxError(
             "No HTTP status code specified for reponse. "
             "This must be the first entry in the reponse section."
         )
+
+
 class Testcase:
     cookies = {}
     headers = {}
@@ -49,7 +55,7 @@ class Testcase:
             items = [f">@ {self.line}:"]
 
             if self.name:
-                if self.name in "=~":
+                if self.name in "=~/":
                     name = ""  # ~ already in `self.expected`
                     actual = ""  # Suppress actual result (may be extensive!)
                 else:
@@ -163,14 +169,27 @@ class Testcase:
                         ]
 
             for data in expect.data:
-                op = data[:1]
+                op, expect = data[:1], data[1:]
 
                 if op == "=":
-                    if data[1:] not in resp.text:
+                    if expect not in resp.text:
                         Testcase.report += [Testcase.Diff(line, op, data, resp.text)]
                 elif op == "~":
-                    if not re.search(data[1:], resp.text):
+                    if not re.search(expect, resp.text):
                         Testcase.report += [Testcase.Diff(line, op, data, resp.text)]
+                elif op == "/":
+                    try:
+                        doc = html.document_fromstring(resp.text)
+                        result = doc.xpath(f"/{expect}")
+
+                        if not result:
+                            Testcase.report += [
+                                Testcase.Diff(line, op, data, resp.text)
+                            ]
+                    except XPathEvalError:
+                        Testcase.report += [
+                            Testcase.Diff(line, op, data, "Invalid XPath")
+                        ]
 
             if Testcase.report:
                 return False
@@ -221,7 +240,11 @@ class TestSuite:
 
                     elif statement == ">":
                         # response
-                        if line.startswith("=") or line.startswith("~"):
+                        if (
+                            line.startswith("=")
+                            or line.startswith("~")
+                            or line.startswith("/")
+                        ):
                             test.adddata(line)
                         else:
                             try:
