@@ -99,7 +99,7 @@ class Testcase:
                     diff += [(line, header, content, None)]
                 else:
                     if resp.headers[header] != content:
-                        diff += [(line, f"{header}: ", content, resp.headers[header])]
+                        diff += [(line, header, content, resp.headers[header])]
 
             for data in expect.data:
                 if data not in resp.text:
@@ -119,10 +119,12 @@ class Testcase:
             print(f">@ {line}:")
 
             if name:
-                print(f"\t{GRE}-{name}{expect}{NON}")
+                print(f"\t{GRE}-{name}: {expect}{NON}")
 
                 if result:
-                    print(f"\t{RED}+{name}{result}{NON}")
+                    print(f"\t{RED}+{name}: {result}{NON}")
+                else:
+                    print(f"\t{RED}+{name}:{NON}")
             else:
                 print(f"\t{GRE}-{expect}{NON}")
 
