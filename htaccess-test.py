@@ -17,7 +17,7 @@ from lxml import html
 from lxml.etree import XPathEvalError  # pylint: disable=no-name-in-module
 
 
-VERSION = "0.0.2"
+VERSION = "0.0.3"
 
 RED = "\033[31m"
 GRE = "\033[32m"
@@ -167,9 +167,12 @@ class Testcase:
 
         uri = self.uri
 
+        s = requests.session()
+        s.trust_env = False
+
         for expect in self.responses:
             allow_redirects = not self.method == "head"
-            method = getattr(requests, self.method)
+            method = getattr(s, self.method)
 
             resp = method(
                 uri,
